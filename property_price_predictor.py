@@ -5,11 +5,13 @@ import numpy as np
 from sklearn.model_selection import train_test_split,cross_val_score
 from sklearn.linear_model import ElasticNet
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from sklearn.preprocessing import StandardScaler, PolynomialFeatures, OneHotEncoder
+from sklearn.preprocessing import StandardScaler, PolynomialFeatures
 from sklearn.decomposition import PCA
 import category_encoders as ce
 import matplotlib.pyplot as plt
-import pickle
+import seaborn as sbn
+from typing import Tuple, Dict
+import time
 
 class PricePredictionModel:
     def __init__(self,num_of_features : int):
@@ -23,7 +25,7 @@ class PricePredictionModel:
         self.targetEncoder = ce.TargetEncoder(cols=['locality'], handle_unknown='value', handle_missing='value',smoothing=5)
         
 
-    def preprocess_data(self, df, target_column):
+    def preprocess_data(self, df : pd.DataFrame, target_column : str) -> Tuple[pd.DataFrame,pd.DataFrame, pd.Series,pd.Series]:
         """
         Split the data into training and test sets, and standardize features.
         Args:
@@ -41,10 +43,10 @@ class PricePredictionModel:
         test_data['locality'] = self.targetEncoder.transform(test_data['locality'])
         
 
-        X_train = train_data.drop(columns=['price'])  # Drop the target column
+        X_train = train_data.drop(columns=['price'])  # Drop the target column in training set
         y_train = train_data['price']                # Target variable
 
-        X_test = test_data.drop(columns=['price'])   # Drop the target column
+        X_test = test_data.drop(columns=['price'])   # Drop the target column in testing set
         y_test = test_data['price']     
         
         original_feature_names=X_train.columns
@@ -62,14 +64,14 @@ class PricePredictionModel:
        
         return X_train, X_test, y_train, y_test
 
-    def train(self, X_train, y_train):
+    def train(self, X_train : pd.DataFrame, y_train : pd.Series):
         """
         Train the linear regression model on the training data.
         """
         self.model.fit(X_train, y_train)
         print("Model trained successfully!")
 
-    def evaluate(self, X_test, y_test):
+    def evaluate(self, X_test : pd.DataFrame, y_test : pd.Series) -> Dict:
         """
         Evaluate the model on test data.
         Args:
@@ -86,37 +88,10 @@ class PricePredictionModel:
             'RMSE': mean_squared_error(y_test, y_pred, squared=False),
             'R2 Score': r2_score(y_test, y_pred)
         }
-
-        
         return metrics
 
-    def save_model(self, filename):
-        """
-        Save the trained model and scaler to a file using pickle.
-        Args:
-        - filename: The name of the file to save the model.
-        """
-        with open(filename, 'wb') as f:
-            pickle.dump({'model': self.model, 'scaler': self.scaler, 'pca': self.pca, 'poly': self.poly, 'targetEncoder':self.targetEncoder,'features': self.feature_names}, f)
-        print(f"Model saved to {filename}")
 
-    def load_model(self, filename):
-        """
-        Load a trained model and scaler from a file.
-        Args:
-        - filename: The name of the file to load the model from.
-        """
-        with open(filename, 'rb') as f:
-            data = pickle.load(f)
-            self.model = data['model']
-            self.targetEncoder = data['targetEncoder']
-            self.scaler = data['scaler']
-            self.pca = data['pca']
-            self.poly = data['poly']
-            self.feature_names = data['features']
-        print(f"Model loaded from {filename}")
-
-    def predict(self, new_data):
+    def predict(self, new_data : Dict) -> float:
         """
         Predict the price for a new property.
         Args:
@@ -132,11 +107,11 @@ class PricePredictionModel:
         new_data_scaled = self.scaler.transform(new_data_df)
         new_data_pca = self.pca.transform(new_data_scaled)
         new_data_poly = self.poly.transform(new_data_pca)
-        
-        # Predict
-        return self.model.predict(new_data_poly)[0]
+        predicted_price = self.model.predict(new_data_poly)[0]
+        return predicted_price
     
-    def clean_data(self, df):
+    def clean_data(self, df : pd.DataFrame) -> pd.DataFrame:
+
         df['locality'] = df['locality'].str.lower()
         df['bedrooms'] = df['bedrooms'].fillna(df['bedrooms'].mode())
         df['bathrooms'] = df['bathrooms'].fillna(df['bathrooms'].mode())
@@ -171,43 +146,39 @@ class PricePredictionModel:
 
         return df
     
-    def remove_outliers(self,df, column):
+    def remove_outliers(self,df : pd.DataFrame, column : str) -> pd.DataFrame:
             Q1 = df[column].quantile(0.05)
             Q3 = df[column].quantile(0.95)
             IQR = Q3 - Q1
             lower_bound = Q1 - 1.5 * IQR
             upper_bound = Q3 + 1.5 * IQR
             df_without_outliers = df[(df[column] >= lower_bound) & (df[column] <= upper_bound)]
-            #print(f'{len(df)-len(df_without_outliers)} rows have been removed from the {column} column')
+            
             return df_without_outliers
-    
 
-if __name__ == "__main__":
-    # Sample dataset
-    df= pd.read_csv('data/cleaned_data_withextrainfo.csv')
+def main():
+
+    """
+    Orcestrates the whole program
+    """
+    df= pd.read_csv('data/dataset.csv')
+    
     #Select Features list
-    # df_featured=df[['locality','bedrooms', 'bathrooms','livingArea','cadastralIncome','buildingState','toilets','facades','pool','price']]
     df_featured=df[['locality','mobib_score','bedrooms', 'bathrooms','cadastralIncome','livingArea','buildingState','constructionYear','facades','fireplace','toilets','pool','price']]
-    
-    
     num_of_features=df_featured.shape[1]-1
     # Initialize and preprocess
     model = PricePredictionModel(num_of_features)
-    df_featured=model.clean_data(df_featured)
+    #Clean the data
+    df_featured = model.clean_data(df_featured)
+    #Preprocess the data
     X_train, X_test, y_train, y_test = model.preprocess_data(df_featured, target_column='price')
     # Train the model
     model.train(X_train, y_train)
-
     # Evaluate the model
     metrics = model.evaluate(X_test, y_test)
     print("Evaluation Metrics:", metrics)
-
-    # Save the model
-    model.save_model('pickle/price_model.pkl')
-
+    
     # Predict a new property
-    #'HOUSE'--property_type=1
-    #'APARTMENT'--property_type=0
     new_property={
         'locality':'LEUVEN',
         'mobib_score':8,
@@ -222,6 +193,15 @@ if __name__ == "__main__":
         'toilets':2,
         'pool':0
     }
-
+    start_time = time.time()
     predicted_price = model.predict(new_property)
-    print("Predicted Price for the new property:", predicted_price)
+    print("Predicted Price for the new property:", predicted_price)  
+    end_time = time.time()
+
+    # Calculate inference time
+    inference_time = end_time - start_time
+    print(f"Inference Time: {inference_time:.6f} seconds")      
+
+
+if __name__ == "__main__":
+    main()

@@ -19,7 +19,6 @@
 - Pandas
 - Scikit-learn
 - Seaborn
-- Streamlit
 - LinearRegression(ElasticNet)
 - Python 3.11.3 
 
@@ -33,10 +32,9 @@ This script will:
 1. Clean the dataset to handle NaN values and outliers.
 2. Split the dataset into Training and testing set.
 3. Perform Data preprocessing.
-4. Create a Linear Regression model(ElasticNet).
+4. Build Linear Regression model(ElasticNet).
 5. Evaluate the model.
-6. Saves the model.
-7. Make price Prediction 
+
 
 --- To execute the project: 
          python property_price_predictor.py
@@ -57,6 +55,7 @@ The project has the following core components:
     - requirements.txt  #contains list of dependencies for the project.
 
 4. property_price_predictor.py 
+5. model_evaluation.md # describes the model and its efficiency.
 5. .gitignore
 
 
